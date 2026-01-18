@@ -19,40 +19,62 @@ spinner() {
     printf "    \b\b\b\b"
 }
 
-# --- Comprobaciones ---
+# --- Comprobaciones Previas ---
 if ! command -v gs &> /dev/null; then
     echo "Error: Instala ghostscript (sudo apt install ghostscript)."
     exit 1
 fi
 
-# --- CAPTURA DE ARCHIVOS (MODO SEGURO) ---
-# Usamos mapfile para leer la salida de ls línea por línea en un ARRAY.
-# Esto respeta los espacios en los nombres.
-mapfile -t archivos < <(ls -v *.pdf 2>/dev/null)
+# --- SELECCIÓN DE MODO ---
+MODO="NORMAL"
+if [ "$1" == "--god" ]; then
+    MODO="GOD"
+fi
 
-# Verificar si el array está vacío o solo tiene el archivo de salida
+# --- CAPTURA DE ARCHIVOS ---
+echo "========================================"
+if [ "$MODO" == "GOD" ]; then
+    echo "⚡ MODO DIOS ACTIVADO ⚡"
+    echo "Buscando PDFs en esta carpeta y todas las subcarpetas..."
+    # find . : Busca en el directorio actual (.) recursivamente
+    # -type f : Solo archivos
+    # sort -V : Ordenamiento natural de versiones (para que 2 vaya antes que 10)
+    mapfile -t archivos < <(find . -type f -name "*.pdf" | sort -V)
+else
+    echo "📂 MODO NORMAL"
+    echo "Buscando PDFs solo en la carpeta actual..."
+    mapfile -t archivos < <(ls -v *.pdf 2>/dev/null)
+fi
+echo "========================================"
+
+# Verificar si se encontró algo
 if [ ${#archivos[@]} -eq 0 ]; then
-    echo "Error: No hay archivos .pdf en este directorio."
+    echo "Error: No se encontraron archivos .pdf."
     exit 1
 fi
 
-# --- Mostrar el Proceso (Fase 1: Listado) ---
-echo "========================================"
-echo "   PREPARANDO FUSIÓN DE ARCHIVOS PDF"
-echo "========================================"
+# --- Filtrado y Listado ---
 echo "Se unirán los siguientes archivos en este orden:"
 echo ""
 
 count=0
 lista_final=()
 
-# Iteramos sobre el ARRAY, no sobre una cadena de texto
 for f in "${archivos[@]}"; do
-    # Ignoramos el archivo de salida si ya existe
-    if [ "$f" != "$SALIDA" ]; then
+    # Obtenemos solo el nombre del archivo para comparar, ignorando la ruta ./
+    nombre_base=$(basename "$f")
+    
+    # Evitamos unir el archivo de salida consigo mismo si ya existe
+    if [ "$nombre_base" != "$SALIDA" ]; then
         ((count++))
-        echo "  $count. $f"
-        # Añadimos a una nueva lista limpia para pasársela a Ghostscript
+        
+        # En modo DIOS mostramos la ruta para saber de qué subcarpeta viene
+        if [ "$MODO" == "GOD" ]; then
+            echo "  $count. $f"
+        else
+            echo "  $count. $nombre_base"
+        fi
+        
         lista_final+=("$f") 
     fi
 done
@@ -63,13 +85,13 @@ if [ "$count" -eq 0 ]; then
 fi
 
 echo ""
-echo "Total: $count archivos."
+echo "----------------------------------------"
+echo "Total: $count archivos a fusionar."
 echo "----------------------------------------"
 read -p "Presiona [ENTER] para comenzar o [Ctrl+C] para cancelar..."
 
-# --- Ejecución (Fase 2: Procesamiento) ---
-# Importante: "${lista_final[@]}" con comillas mantiene los nombres como unidades enteras
-
+# --- Ejecución ---
+# Ejecutamos Ghostscript en segundo plano y activamos el spinner
 gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -sOutputFile="$SALIDA" "${lista_final[@]}" 2> /dev/null &
 
 pid=$!
@@ -82,5 +104,5 @@ echo ""
 if [ $status -eq 0 ]; then
     echo "✅ ¡HECHO! El archivo se guardó como: $SALIDA"
 else
-    echo "❌ Ocurrió un error. Verifica que los archivos PDF no estén corruptos."
+    echo "❌ Ocurrió un error. Verifica que los archivos no estén corruptos."
 fi
