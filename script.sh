@@ -66,18 +66,34 @@ lista_valida=()
 # Mostramos la lista numerada
 for f in "${archivos[@]}"; do
     nombre_base=$(basename "$f")
-    # Filtramos para no mostrarnos a nosotros mismos si el output ya existe
-    if [ "$nombre_base" != "$SALIDA_MERGE" ] && [[ "$nombre_base" != *"_min.pdf" ]]; then
-        ((count++))
-        
-        if [ "$MODO_BUSQUEDA" == "GOD" ]; then
-            echo "  [$count] $f"
-        else
-            echo "  [$count] $nombre_base"
-        fi
-        
-        lista_valida+=("$f") 
+    
+    # --- FILTROS INTELIGENTES ---
+    
+    # 1. Filtro de Seguridad para Fusión:
+    # Si estamos uniendo, NO queremos incluir el archivo de salida en la lista
+    # para evitar errores de lectura/escritura circular.
+    if [ "$MODO_ACCION" == "FUSIONAR" ] && [ "$nombre_base" == "$SALIDA_MERGE" ]; then
+        continue
     fi
+
+    # 2. Ocultar archivos ya comprimidos (_min.pdf) para no re-comprimirlos por error
+    # (Si quieres verlos también, borra estas 3 líneas siguientes)
+    if [[ "$nombre_base" == *"_min.pdf" ]]; then
+        continue
+    fi
+    
+    # ----------------------------
+
+    ((count++))
+    
+    if [ "$MODO_BUSQUEDA" == "GOD" ]; then
+        echo "  [$count] $f"
+    else
+        echo "  [$count] $nombre_base"
+    fi
+    
+    lista_valida+=("$f") 
+
 done
 
 if [ "$count" -eq 0 ]; then
